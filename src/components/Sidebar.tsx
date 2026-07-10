@@ -6,7 +6,7 @@
 import React from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Plus, Video, Music, Image as ImageIcon, Type, Trash2, FolderOpen, Play, Volume2, Sparkles, Check } from 'lucide-react';
-import { MediaAsset } from '../types';
+import { MediaAsset, TimelineClip } from '../types';
 import { cn } from '../lib/utils';
 import { generateThumbnail } from '../lib/video-utils';
 
@@ -17,6 +17,10 @@ interface SidebarProps {
   onAddToTimeline: (asset: MediaAsset) => void;
   onAddCustomTextClip?: (text: string, style?: any) => void;
   t: any;
+  clips?: TimelineClip[];
+  selectedClipId?: string | null;
+  onSelectClip?: (id: string | null) => void;
+  onUpdateClip?: (clip: TimelineClip) => void;
 }
 
 const VIDEO_TEMPLATES = [
@@ -244,9 +248,16 @@ function playSynthPreview(preset: string) {
   }
 }
 
-export default function Sidebar({ assets, onAddAsset, onDeleteAsset, onAddToTimeline, onAddCustomTextClip, t }: SidebarProps) {
-  const [activeTab, setActiveTab] = React.useState<'uploads' | 'video' | 'audio' | 'text' | 'image'>('uploads');
+export default function Sidebar({ assets, onAddAsset, onDeleteAsset, onAddToTimeline, onAddCustomTextClip, t, clips, selectedClipId, onSelectClip, onUpdateClip }: SidebarProps) {
+  const [activeTab, setActiveTab] = React.useState<'uploads' | 'video' | 'audio' | 'text' | 'image' | 'effects'>('uploads');
   const [isProcessing, setIsProcessing] = React.useState(false);
+
+  const getClipName = (clip: TimelineClip) => {
+    const asset = assets.find(a => a.id === clip.assetId);
+    if (asset) return asset.name;
+    if (clip.type === 'text') return clip.text || 'Texte';
+    return `${clip.type.toUpperCase()} Clip`;
+  };
 
   const onDrop = React.useCallback(async (acceptedFiles: File[]) => {
     setIsProcessing(true);
@@ -369,6 +380,20 @@ export default function Sidebar({ assets, onAddAsset, onDeleteAsset, onAddToTime
           <ImageIcon className="w-5 h-5" />
           <span className="absolute left-full ml-2 px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-[9px] text-zinc-400 font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-md">
             {t.imageTemplates}
+          </span>
+        </button>
+
+        <button 
+          onClick={() => setActiveTab('effects')}
+          className={cn(
+            "p-3 rounded-xl transition-all hover:scale-105 relative group",
+            activeTab === 'effects' ? "text-cyan-400 bg-cyan-400/10" : "text-zinc-500 hover:text-zinc-300"
+          )} 
+          title={t.effects}
+        >
+          <Sparkles className="w-5 h-5" />
+          <span className="absolute left-full ml-2 px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-[9px] text-zinc-400 font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-md">
+            {t.effects}
           </span>
         </button>
       </aside>
@@ -649,7 +674,7 @@ export default function Sidebar({ assets, onAddAsset, onDeleteAsset, onAddToTime
                           duration: tpl.duration
                         };
                         if (!alreadyInProject) {
-                          onAddAsset(asset);
+                           onAddAsset(asset);
                         }
                         onAddToTimeline(asset);
                       }}
@@ -661,6 +686,132 @@ export default function Sidebar({ assets, onAddAsset, onDeleteAsset, onAddToTime
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 6: Effects & Filters */}
+        {activeTab === 'effects' && (
+          <div className="flex flex-col h-full select-none">
+            <div className="p-4 border-b border-zinc-800/50">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                {t.effectsTabTitle || 'Filtres & Effets'}
+              </span>
+            </div>
+
+            <div className="p-3 flex-1 overflow-y-auto space-y-4">
+              {/* Clip selection/info */}
+              <div className="bg-zinc-900/40 border border-zinc-800/80 p-3 rounded-xl flex flex-col gap-2.5">
+                <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">{t.clipLabel || 'Clip :'}</span>
+                
+                {clips && clips.filter(c => c.type === 'video' || c.type === 'image').length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    <select
+                      value={selectedClipId || ''}
+                      onChange={(e) => onSelectClip && onSelectClip(e.target.value || null)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-1.5 text-[10px] text-zinc-300 focus:border-cyan-500 focus:outline-none"
+                    >
+                      <option value="">-- {t.selectClip || 'Sélectionner un clip'} --</option>
+                      {clips
+                        .filter(c => c.type === 'video' || c.type === 'image')
+                        .map(c => (
+                          <option key={c.id} value={c.id}>
+                            [{c.type.toUpperCase()}] {getClipName(c)} ({Math.round(c.duration)}s)
+                          </option>
+                        ))
+                      }
+                    </select>
+
+                    {selectedClipId && clips.find(c => c.id === selectedClipId) && (
+                      <div className="text-[9px] text-zinc-400 bg-black/40 border border-zinc-800/50 rounded-lg p-2 flex flex-col gap-1">
+                        <div className="flex justify-between">
+                          <span className="text-zinc-500">Type :</span>
+                          <span className="font-semibold text-cyan-400 uppercase">{clips.find(c => c.id === selectedClipId)?.type}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-zinc-500">Filtre actuel :</span>
+                          <span className="font-mono text-zinc-400 truncate max-w-[120px]">{clips.find(c => c.id === selectedClipId)?.filter || 'Aucun'}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-zinc-500 italic text-center py-2">
+                    {t.noClipsAvailable || 'Aucun clip disponible sur la timeline.'}
+                  </div>
+                )}
+              </div>
+
+              {/* Grid of filters if a clip is selected */}
+              {selectedClipId && clips && clips.find(c => c.id === selectedClipId) ? (
+                <div className="space-y-3">
+                  <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider block">Filtres Disponibles</span>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { name: t.filterNone || 'Aucun', value: 'none', previewStyle: {} },
+                      { name: t.filterGrayscale || 'Noir & Blanc', value: 'grayscale(100%)', previewStyle: { filter: 'grayscale(100%)' } },
+                      { name: t.filterSepia || 'Sépia', value: 'sepia(100%)', previewStyle: { filter: 'sepia(100%)' } },
+                      { name: t.filterContrast || 'Contraste +', value: 'contrast(160%)', previewStyle: { filter: 'contrast(160%)' } },
+                      { name: t.filterBlur || 'Flou', value: 'blur(3px)', previewStyle: { filter: 'blur(3px)' } },
+                      { name: t.filterInvert || 'Inverser', value: 'invert(100%)', previewStyle: { filter: 'invert(100%)' } },
+                      { name: t.filterSaturate || 'Saturé', value: 'saturate(180%)', previewStyle: { filter: 'saturate(180%)' } },
+                      { name: t.filterBrightness || 'Luminosité', value: 'brightness(140%)', previewStyle: { filter: 'brightness(140%)' } },
+                      { name: 'Chaud (Warm)', value: 'sepia(40%) saturate(130%) contrast(110%)', previewStyle: { filter: 'sepia(40%) saturate(130%) contrast(110%)' } },
+                      { name: 'Froid (Cool)', value: 'contrast(110%) hue-rotate(30deg) saturate(120%)', previewStyle: { filter: 'contrast(110%) hue-rotate(30deg) saturate(120%)' } }
+                    ].map((f) => {
+                      const currentClip = clips.find(c => c.id === selectedClipId);
+                      const isApplied = currentClip && (currentClip.filter === f.value || (f.value === 'none' && !currentClip.filter));
+
+                      return (
+                        <button
+                          key={f.value}
+                          onClick={() => {
+                            if (currentClip && onUpdateClip) {
+                              onUpdateClip({
+                                ...currentClip,
+                                filter: f.value === 'none' ? undefined : f.value
+                              });
+                            }
+                          }}
+                          className={cn(
+                            "group p-2 rounded-xl border bg-zinc-900/50 hover:bg-zinc-900/90 text-left transition-all flex flex-col gap-1.5 relative cursor-pointer overflow-hidden",
+                            isApplied 
+                              ? "border-cyan-500 bg-cyan-500/5 hover:bg-cyan-500/10" 
+                              : "border-zinc-800/60 hover:border-zinc-700"
+                          )}
+                        >
+                          {/* Mini visual preview */}
+                          <div className="w-full aspect-video rounded-md bg-zinc-950 overflow-hidden relative flex items-center justify-center border border-zinc-800/40">
+                            {/* We show a small gradient or abstract image matching the filter */}
+                            <div 
+                              className="absolute inset-0 bg-gradient-to-tr from-pink-500 via-purple-600 to-cyan-500 opacity-80"
+                              style={f.previewStyle}
+                            />
+                            {isApplied && (
+                              <div className="absolute top-1 right-1 bg-cyan-500 text-black p-0.5 rounded-full z-10">
+                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                              </div>
+                            )}
+                          </div>
+                          
+                          <span className={cn(
+                            "text-[9px] font-semibold leading-none truncate w-full",
+                            isApplied ? "text-cyan-400" : "text-zinc-400 group-hover:text-zinc-200"
+                          )}>
+                            {f.name}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[10px] text-zinc-500 text-center py-6 bg-zinc-900/20 border border-zinc-800/40 rounded-xl px-4">
+                  {t.selectClipToFilter || 'Sélectionnez un clip pour lui appliquer un effet.'}
+                </div>
+              )}
             </div>
           </div>
         )}

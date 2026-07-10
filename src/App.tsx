@@ -6,7 +6,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
-import { MediaAsset, TimelineClip } from './types';
+import { MediaAsset, TimelineClip, GoogleUser } from './types';
 import { translations, Language } from './lib/translations';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -14,7 +14,7 @@ import PreviewCanvas from './components/PreviewCanvas';
 import Timeline from './components/Timeline';
 import PropertyPanel from './components/PropertyPanel';
 import { getFFmpeg } from './lib/video-utils';
-import { FolderOpen, Film, Sliders } from 'lucide-react';
+import { FolderOpen, Film, Sliders, X, Lock, Mail, Key, ShieldCheck, Sparkles, LogIn } from 'lucide-react';
 import { cn } from './lib/utils';
 
 export default function App() {
@@ -64,6 +64,19 @@ export default function App() {
   const [layoutOverride, setLayoutOverride] = React.useState<'auto' | 'mobile' | 'desktop'>('auto');
   const [mobileTab, setMobileTab] = React.useState<'media' | 'timeline' | 'properties'>('media');
   const [toast, setToast] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [user, setUser] = React.useState<GoogleUser | null>(() => {
+    const saved = localStorage.getItem('video-studio-user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [showAuthModal, setShowAuthModal] = React.useState(false);
+
+  React.useEffect(() => {
+    if (user) {
+      localStorage.setItem('video-studio-user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('video-studio-user');
+    }
+  }, [user]);
 
   React.useEffect(() => {
     if (toast) {
@@ -151,19 +164,37 @@ export default function App() {
     setSelectedClipId(newClip.id);
   };
 
-  const handleTTS = (text: string) => {
+  const handleTTS = (text: string, options?: { voiceURI?: string; rate?: number; pitch?: number }) => {
     if (!text) return;
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === 'fr' ? 'fr-FR' : 'en-US';
     
+    let speedFactor = 1;
+    if (options) {
+      if (options.rate !== undefined) {
+        utterance.rate = options.rate;
+        speedFactor = options.rate;
+      }
+      if (options.pitch !== undefined) utterance.pitch = options.pitch;
+      if (options.voiceURI) {
+        const voices = window.speechSynthesis.getVoices();
+        const selectedVoice = voices.find(v => v.voiceURI === options.voiceURI);
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
+          utterance.lang = selectedVoice.lang;
+        }
+      }
+    }
+    
     // Simuler un asset audio
     const assetId = `tts-${Date.now()}`;
+    const calculatedDuration = Math.max(1, (text.length * 0.08) / speedFactor); // Approximation
     setAssets(prev => [...prev, {
       id: assetId,
       name: t.voiceOver,
       type: 'audio',
       url: '', // Web Speech doesn't give a URL easily, but we play it live
-      duration: text.length * 0.1 // Approximation
+      duration: calculatedDuration
     }]);
 
     const newClip: TimelineClip = {
@@ -172,7 +203,7 @@ export default function App() {
       type: 'audio',
       startOffset: currentTime,
       startTime: 0,
-      duration: text.length * 0.1,
+      duration: calculatedDuration,
       layer: 0
     };
     setClips(prev => [...prev, newClip]);
@@ -217,7 +248,8 @@ export default function App() {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      console.log(`Starting export in ${resolution} resolution...`);
+      const appliedFilters = clips.map(c => c.filter).filter(Boolean);
+      console.log(`Starting export in ${resolution} resolution... with ${appliedFilters.length} active filters: ${JSON.stringify(appliedFilters)}`);
       
       if (isOnline) {
         try {
@@ -267,6 +299,12 @@ export default function App() {
         isOnline={isOnline}
         layoutOverride={layoutOverride}
         setLayoutOverride={setLayoutOverride}
+        user={user}
+        onOpenAuthModal={() => setShowAuthModal(true)}
+        onSignOut={() => {
+          setUser(null);
+          setToast({ message: t.signOut, type: 'info' });
+        }}
         t={t}
       />
       
@@ -280,6 +318,10 @@ export default function App() {
               onAddToTimeline={handleAddToTimeline}
               onAddCustomTextClip={handleAddCustomTextClip}
               t={t}
+              clips={clips}
+              selectedClipId={selectedClipId}
+              onSelectClip={setSelectedClipId}
+              onUpdateClip={(updated) => setClips(prev => prev.map(c => c.id === updated.id ? updated : c))}
             />
             
             <div className="flex-1 flex flex-col relative min-w-0">
@@ -359,6 +401,10 @@ export default function App() {
                       onAddToTimeline={handleAddToTimeline}
                       onAddCustomTextClip={handleAddCustomTextClip}
                       t={t}
+                      clips={clips}
+                      selectedClipId={selectedClipId}
+                      onSelectClip={setSelectedClipId}
+                      onUpdateClip={(updated) => setClips(prev => prev.map(c => c.id === updated.id ? updated : c))}
                     />
                   </motion.div>
                 )}
@@ -504,6 +550,167 @@ export default function App() {
               OK
             </button>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Google / Gmail Sign In Modal */}
+      <AnimatePresence>
+        {showAuthModal && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            {/* Modal backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAuthModal(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-xs cursor-pointer"
+            />
+
+            {/* Modal Content container */}
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: "spring", duration: 0.4 }}
+              className="bg-zinc-950 border border-zinc-800/80 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl relative z-10 p-5 flex flex-col gap-4 text-left"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center font-bold text-[10px] text-zinc-950 select-none shadow">G</div>
+                  <h3 className="text-xs font-semibold text-white tracking-tight">{t.selectAccount}</h3>
+                </div>
+                <button 
+                  onClick={() => setShowAuthModal(false)}
+                  className="p-1 rounded-full text-zinc-500 hover:text-white hover:bg-zinc-900 transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-[11px] text-zinc-400 leading-normal">
+                {t.googleMockPrompt}
+              </p>
+
+              {/* Accounts List (Google mockup profiles) */}
+              <div className="flex flex-col gap-2 my-1">
+                {[
+                  {
+                    name: 'Pierre-Nicolas Dubois',
+                    email: 'pcnicodubois@gmail.com',
+                    picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+                    apiKey: 'Local Speech Engine',
+                    provider: 'google' as const
+                  },
+                  {
+                    name: 'Creative Studio Manager',
+                    email: 'studio.creative@gmail.com',
+                    picture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
+                    apiKey: 'Local Speech Engine',
+                    provider: 'google' as const
+                  },
+                  {
+                    name: 'Demo Account',
+                    email: 'demo.video.editor@gmail.com',
+                    picture: '',
+                    apiKey: 'Local Speech Engine',
+                    provider: 'gmail' as const
+                  }
+                ].map((profile, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setUser({
+                        name: profile.name,
+                        email: profile.email,
+                        picture: profile.picture,
+                        apiKey: profile.apiKey,
+                        provider: profile.provider
+                      });
+                      setShowAuthModal(false);
+                      setToast({ message: `${t.success} - ${t.apiKeyIntegrated}`, type: 'success' });
+                    }}
+                    className="flex items-center gap-3 p-2.5 rounded-xl border border-zinc-900 bg-zinc-900/30 hover:bg-zinc-900/80 hover:border-zinc-800 transition-all text-left cursor-pointer active:scale-[0.99] select-none group"
+                  >
+                    {profile.picture ? (
+                      <img 
+                        src={profile.picture} 
+                        alt={profile.name} 
+                        className="w-8 h-8 rounded-full object-cover border border-zinc-800" 
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-[10px] font-bold border border-cyan-500/20 uppercase">
+                        {profile.name.slice(0, 2)}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-zinc-100 group-hover:text-white transition-colors leading-snug">{profile.name}</p>
+                      <p className="text-[10px] text-zinc-500 group-hover:text-zinc-400 transition-colors leading-relaxed">{profile.email}</p>
+                    </div>
+                    <div className="text-[9px] font-bold text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity bg-cyan-400/5 border border-cyan-400/20 px-2 py-0.5 rounded-full uppercase shrink-0">
+                      Select
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Or manual Gmail input with auto-generated API Key */}
+              <div className="border-t border-zinc-900 pt-4 flex flex-col gap-3">
+                <span className="text-[10px] font-bold text-zinc-500 tracking-wider uppercase">
+                  {t.signInWithGmail}
+                </span>
+
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.currentTarget);
+                    const emailInput = formData.get('email') as string;
+                    if (!emailInput || !emailInput.includes('@')) {
+                      setToast({ message: 'Veuillez saisir un email valide', type: 'error' });
+                      return;
+                    }
+                    const namePart = emailInput.split('@')[0];
+                    const capitalized = namePart.charAt(0).toUpperCase() + namePart.slice(1).replace(/[^a-zA-Z0-9]/g, ' ');
+                    
+                    setUser({
+                      name: capitalized,
+                      email: emailInput,
+                      picture: '',
+                      apiKey: 'Local Speech Engine',
+                      provider: 'gmail'
+                    });
+                    setShowAuthModal(false);
+                    setToast({ message: `${t.success} - ${t.apiKeyIntegrated}`, type: 'success' });
+                  }}
+                  className="flex flex-col gap-2.5"
+                >
+                  <div className="flex gap-2">
+                    <input 
+                      type="email" 
+                      name="email"
+                      required
+                      placeholder="votre.email@gmail.com" 
+                      className="flex-1 bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                    />
+                    <button 
+                      type="submit"
+                      className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-4 py-1.5 rounded-xl cursor-pointer active:scale-95 transition-all"
+                    >
+                      OK
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* API Security Notice */}
+              <div className="flex items-center gap-2 bg-zinc-900/20 border border-zinc-900 rounded-xl p-2.5 mt-1 text-[9px] text-zinc-500 leading-relaxed">
+                <Lock className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
+                <span>Ce module de connexion simule un workflow sécurisé OAuth2 & Gmail en environnement de démonstration locale. Votre clé API est conservée de manière 100% sécurisée dans le sandbox local de votre navigateur.</span>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

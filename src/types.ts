@@ -42,3 +42,12 @@ export interface TimelineState {
   totalDuration: number;
   isPlaying: boolean;
 }
+
+export interface GoogleUser {
+  email: string;
+  name: string;
+  picture: string;
+  apiKey: string;
+  provider: 'google' | 'gmail';
+}
+

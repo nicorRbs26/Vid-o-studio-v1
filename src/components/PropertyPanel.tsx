@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Sliders, Layers, Plus, Wand2, Scissors } from 'lucide-react';
+import { Sliders, Layers, Plus, Wand2, Scissors, Mic, Volume2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TimelineClip } from '../types';
 import { cn } from '../lib/utils';
@@ -15,13 +15,39 @@ interface PropertyPanelProps {
   onDeleteClip: (id: string) => void;
   onSplitClip: (id: string) => void;
   onAddText: () => void;
-  onTTS: (text: string) => void;
+  onTTS: (text: string, options?: { voiceURI?: string; rate?: number; pitch?: number }) => void;
   isOnline: boolean;
   t: any;
 }
 
 export default function PropertyPanel({ selectedClip, onUpdateClip, onDeleteClip, onSplitClip, onAddText, onTTS, isOnline, t }: PropertyPanelProps) {
   const [ttsText, setTtsText] = React.useState('');
+  const [voices, setVoices] = React.useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceURI, setSelectedVoiceURI] = React.useState<string>('');
+  const [rate, setRate] = React.useState<number>(1);
+  const [pitch, setPitch] = React.useState<number>(1);
+
+  React.useEffect(() => {
+    const updateVoices = () => {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        const availableVoices = window.speechSynthesis.getVoices();
+        const filtered = availableVoices.filter(v => 
+          v.lang.startsWith('fr') || v.lang.startsWith('en')
+        );
+        setVoices(filtered);
+        if (filtered.length > 0 && !selectedVoiceURI) {
+          const isFrench = t.voiceSelect ? t.voiceSelect.includes('Voix') : true;
+          const preferred = filtered.find(v => v.lang.startsWith(isFrench ? 'fr' : 'en')) || filtered[0];
+          setSelectedVoiceURI(preferred.voiceURI);
+        }
+      }
+    };
+
+    updateVoices();
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+  }, [t]);
 
   return (
     <div className="w-full sm:w-64 border-l border-zinc-800 bg-panel-bg flex flex-col h-full overflow-y-auto">
@@ -42,8 +68,8 @@ export default function PropertyPanel({ selectedClip, onUpdateClip, onDeleteClip
         </section>
 
         {/* TTS Section */}
-        <section className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50 shadow-inner">
-          <div className="flex items-center justify-between mb-3 gap-1">
+        <section className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50 shadow-inner space-y-3">
+          <div className="flex items-center justify-between mb-1 gap-1">
             <div className="flex items-center gap-2">
               <Wand2 className="w-3 h-3 text-cyan-400" />
               <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{t.voiceOver}</h4>
@@ -52,15 +78,74 @@ export default function PropertyPanel({ selectedClip, onUpdateClip, onDeleteClip
               {t.ttsOffline}
             </span>
           </div>
+
           <textarea 
             value={ttsText}
             onChange={(e) => setTtsText(e.target.value)}
             placeholder="..."
-            className="w-full h-20 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-[11px] focus:border-cyan-500 outline-none resize-none mb-3 text-zinc-300 placeholder:text-zinc-700"
+            className="w-full h-16 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-[11px] focus:border-cyan-500 outline-none resize-none text-zinc-300 placeholder:text-zinc-700"
           />
+
+          {/* Voice Select */}
+          {voices.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">{t.voiceSelect}</label>
+              <select
+                value={selectedVoiceURI}
+                onChange={(e) => setSelectedVoiceURI(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-1.5 text-[10px] text-zinc-300 focus:border-cyan-500 focus:outline-none"
+              >
+                {voices.map((v) => (
+                  <option key={v.voiceURI} value={v.voiceURI}>
+                    {v.name} ({v.lang})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Pitch Slider */}
+          <div className="flex flex-col gap-1">
+            <div className="flex justify-between text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
+              <span>{t.voicePitch}</span>
+              <span className="text-cyan-400">{pitch.toFixed(1)}x</span>
+            </div>
+            <input 
+              type="range"
+              min="0.5"
+              max="2.0"
+              step="0.1"
+              value={pitch}
+              onChange={(e) => setPitch(parseFloat(e.target.value))}
+              className="w-full h-1 bg-zinc-850 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+            />
+          </div>
+
+          {/* Rate Selectors (Speed) */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider mb-0.5">{t.voiceRate}</span>
+            <div className="grid grid-cols-4 gap-1">
+              {[0.5, 1.0, 1.5, 2.0].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRate(r)}
+                  className={cn(
+                    "py-1 rounded text-[9px] font-bold border transition-all cursor-pointer",
+                    rate === r
+                      ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30"
+                      : "bg-zinc-950 text-zinc-500 border-zinc-800 hover:text-zinc-300"
+                  )}
+                >
+                  {r === 0.5 ? t.voiceRateSlow : r === 1.0 ? t.voiceRateNormal : r === 1.5 ? '1.5x' : t.voiceRateFast}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <button 
-            onClick={() => onTTS(ttsText)}
-            className="w-full py-1.5 bg-zinc-200 text-black rounded-md text-[10px] font-bold hover:bg-white transition-colors uppercase tracking-wider"
+            onClick={() => onTTS(ttsText, { voiceURI: selectedVoiceURI, rate, pitch })}
+            className="w-full py-1.5 bg-zinc-200 text-black rounded-md text-[10px] font-bold hover:bg-white transition-colors uppercase tracking-wider cursor-pointer"
           >
             {t.generateAudio}
           </button>

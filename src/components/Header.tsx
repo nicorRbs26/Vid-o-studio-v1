@@ -4,8 +4,9 @@
  */
 
 import React from 'react';
-import { Download, Play, Pause, SkipBack, SkipForward, Languages, Wifi, WifiOff, Smartphone, Monitor } from 'lucide-react';
+import { Download, Play, Pause, SkipBack, SkipForward, Languages, Wifi, WifiOff, Smartphone, Monitor, User, LogOut, Key, Check, Copy, ShieldCheck, Sparkles, LogIn, Mail } from 'lucide-react';
 import { Language } from '../lib/translations';
+import { GoogleUser } from '../types';
 
 interface HeaderProps {
   onExport: () => void;
@@ -20,10 +21,25 @@ interface HeaderProps {
   isOnline: boolean;
   layoutOverride: 'auto' | 'mobile' | 'desktop';
   setLayoutOverride: (mode: 'auto' | 'mobile' | 'desktop') => void;
+  user: GoogleUser | null;
+  onOpenAuthModal: () => void;
+  onSignOut: () => void;
   t: any;
 }
 
-export default function Header({ onExport, isPlaying, onPlayToggle, lang, setLang, resolution, setResolution, aspectRatio, setAspectRatio, isOnline, layoutOverride, setLayoutOverride, t }: HeaderProps) {
+export default function Header({ onExport, isPlaying, onPlayToggle, lang, setLang, resolution, setResolution, aspectRatio, setAspectRatio, isOnline, layoutOverride, setLayoutOverride, user, onOpenAuthModal, onSignOut, t }: HeaderProps) {
+  const [showUserDropdown, setShowUserDropdown] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopyKey = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (user?.apiKey) {
+      navigator.clipboard.writeText(user.apiKey);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   return (
     <header className="h-12 border-b border-zinc-800 flex items-center justify-between px-2 sm:px-4 bg-panel-bg shadow-sm z-50 select-none">
       <div className="flex items-center gap-2 sm:gap-4">
@@ -147,6 +163,122 @@ export default function Header({ onExport, isPlaying, onPlayToggle, lang, setLan
             <span>{t.localEngine}</span>
           </div>
         )}
+
+        {/* User Account / Google Login Component */}
+        <div className="relative">
+          {user ? (
+            <>
+              <button 
+                onClick={() => setShowUserDropdown(!showUserDropdown)}
+                className="flex items-center gap-1.5 p-0.5 rounded-full border border-zinc-800 hover:border-zinc-700 bg-zinc-950 transition-all active:scale-95 cursor-pointer select-none"
+              >
+                {user.picture ? (
+                  <img 
+                    src={user.picture} 
+                    alt={user.name} 
+                    className="w-6 h-6 rounded-full object-cover border border-zinc-700" 
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-[10px] font-bold border border-cyan-500/30 uppercase">
+                    {user.name.slice(0, 2)}
+                  </div>
+                )}
+                <span className="text-[10px] font-medium text-zinc-300 pr-2 hidden md:inline truncate max-w-[80px]">
+                  {user.name}
+                </span>
+              </button>
+
+              {showUserDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowUserDropdown(false)} />
+                  <div className="absolute right-0 top-10 w-72 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-4 z-50 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-150">
+                    <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
+                      {user.picture ? (
+                        <img 
+                          src={user.picture} 
+                          alt={user.name} 
+                          className="w-10 h-10 rounded-full object-cover border border-zinc-700" 
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-bold border border-cyan-500/30 uppercase">
+                          {user.name.slice(0, 2)}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-white leading-snug truncate">{user.name}</p>
+                        <p className="text-[10px] text-zinc-500 truncate leading-relaxed flex items-center gap-1">
+                          <Mail className="w-2.5 h-2.5" />
+                          {user.email}
+                        </p>
+                      </div>
+                      <span className={cn(
+                        "px-2 py-0.5 rounded-full text-[8px] font-bold shrink-0",
+                        user.provider === 'google' ? "bg-red-500/10 text-red-400 border border-red-500/20" : "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
+                      )}>
+                        {user.provider === 'google' ? 'Google' : 'Gmail'}
+                      </span>
+                    </div>
+
+                    <div className="bg-zinc-900/50 rounded-xl p-3 border border-zinc-800/50 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-bold text-zinc-400 tracking-wider uppercase flex items-center gap-1">
+                          <Key className="w-3 h-3 text-cyan-400" />
+                          {t.apiKeyStatus}
+                        </span>
+                        <span className="text-[9px] text-green-400 font-bold bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <ShieldCheck className="w-2.5 h-2.5" />
+                          {t.integrated}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 bg-black/40 border border-zinc-800/80 rounded-lg p-1.5 pl-2.5 mt-1">
+                        <input 
+                          type="text" 
+                          readOnly 
+                          value={user.apiKey.includes('Gemini') ? 'SpeechSynthesis & WebAudio' : user.apiKey} 
+                          className="bg-transparent text-cyan-400 font-mono text-[9px] flex-1 border-none focus:outline-none pointer-events-none uppercase font-semibold" 
+                        />
+                        <button 
+                          onClick={handleCopyKey}
+                          className="p-1 text-zinc-500 hover:text-white hover:bg-zinc-800/50 rounded transition-all cursor-pointer"
+                          title="Copy Status"
+                        >
+                          {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      
+                      <p className="text-[8px] text-zinc-500 leading-normal flex items-center gap-1 mt-1">
+                        <Sparkles className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
+                        <span>{t.apiKeyIntegrated}</span>
+                      </p>
+                    </div>
+
+                    <button 
+                      onClick={() => {
+                        setShowUserDropdown(false);
+                        onSignOut();
+                      }}
+                      className="w-full flex items-center justify-center gap-2 py-1.5 text-xs font-semibold text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl transition-all cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      {t.signOut}
+                    </button>
+                  </div>
+                </>
+              )}
+            </>
+          ) : (
+            <button 
+              onClick={onOpenAuthModal}
+              className="flex items-center gap-1.5 py-1 px-2.5 text-[10px] sm:text-xs font-semibold rounded-md border border-zinc-800 hover:border-zinc-700 bg-zinc-950 text-zinc-300 hover:text-white transition-all cursor-pointer select-none"
+            >
+              <LogIn className="w-3 h-3 text-cyan-400" />
+              <span>{t.signInWithGoogle}</span>
+            </button>
+          )}
+        </div>
 
         <button 
           onClick={onExport}
