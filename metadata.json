@@ -1,0 +1,6 @@
+{
+  "name": "Studio Vidéo Pro",
+  "description": "Éditeur vidéo professionnel inspiré de CapCut avec timeline, TTS, et export MP4.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
