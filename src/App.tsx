@@ -54,6 +54,27 @@ export default function App() {
     localStorage.setItem('video-studio-clips', JSON.stringify(clips));
   }, [clips]);
 
+  const [apiKeyMode, setApiKeyMode] = React.useState<'workspace' | 'custom' | 'none'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('video_studio_api_key_mode') as any) || 'workspace';
+    }
+    return 'workspace';
+  });
+  const [customApiKey, setCustomApiKey] = React.useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('video_studio_custom_api_key') || '';
+    }
+    return '';
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem('video_studio_api_key_mode', apiKeyMode);
+  }, [apiKeyMode]);
+
+  React.useEffect(() => {
+    localStorage.setItem('video_studio_custom_api_key', customApiKey);
+  }, [customApiKey]);
+
   const [currentTime, setCurrentTime] = React.useState(0);
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [selectedClipId, setSelectedClipId] = React.useState<string | null>(null);
@@ -178,7 +199,9 @@ export default function App() {
           },
           body: JSON.stringify({
             text,
-            voice: options.geminiVoice || 'Zephyr'
+            voice: options.geminiVoice || 'Zephyr',
+            apiKey: customApiKey,
+            apiKeyMode: apiKeyMode
           })
         });
 
@@ -308,7 +331,10 @@ export default function App() {
     setIsExporting(true);
     try {
       const appliedFilters = clips.map(c => c.filter).filter(Boolean);
-      console.log(`Starting export in ${resolution} resolution... with ${appliedFilters.length} active filters: ${JSON.stringify(appliedFilters)}`);
+      const audioMixLevels = clips
+        .filter(c => c.type === 'audio')
+        .map(c => ({ id: c.id, name: assets.find(a => a.id === c.assetId)?.name || 'Clip', volume: c.volume !== undefined ? c.volume : 1 }));
+      console.log(`Starting export in ${resolution} resolution... with ${appliedFilters.length} active filters: ${JSON.stringify(appliedFilters)} and audio mix levels: ${JSON.stringify(audioMixLevels)}`);
       
       if (isOnline) {
         try {
@@ -382,6 +408,10 @@ export default function App() {
               onSelectClip={setSelectedClipId}
               onUpdateClip={(updated) => setClips(prev => prev.map(c => c.id === updated.id ? updated : c))}
               onToast={(toastData) => setToast(toastData)}
+              apiKeyMode={apiKeyMode}
+              setApiKeyMode={setApiKeyMode}
+              customApiKey={customApiKey}
+              setCustomApiKey={setCustomApiKey}
             />
             
             <div className="flex-1 flex flex-col relative min-w-0">
@@ -466,6 +496,10 @@ export default function App() {
                       onSelectClip={setSelectedClipId}
                       onUpdateClip={(updated) => setClips(prev => prev.map(c => c.id === updated.id ? updated : c))}
                       onToast={(toastData) => setToast(toastData)}
+                      apiKeyMode={apiKeyMode}
+                      setApiKeyMode={setApiKeyMode}
+                      customApiKey={customApiKey}
+                      setCustomApiKey={setCustomApiKey}
                     />
                   </motion.div>
                 )}

@@ -23,6 +23,7 @@ export const translations = {
     start: 'Début (s)',
     duration: 'Durée (s)',
     opacity: 'Opacité',
+    clipVolume: 'Volume du Clip (Gain)',
     deleteClip: 'Supprimer le clip',
     transitionIn: "Transition d'entrée",
     transitionDuration: 'Durée Transition (s)',
@@ -102,7 +103,18 @@ export const translations = {
     applyEffect: 'Appliquer l\'effet',
     clipLabel: 'Clip :',
     noClipsAvailable: 'Aucun clip disponible sur la timeline.',
-    effectsTabTitle: 'Filtres & Effets'
+    effectsTabTitle: 'Filtres & Effets',
+    aiConfigTitle: 'Configuration des Modèles IA',
+    aiConfigMode: 'Mode d\'importation',
+    aiConfigWorkspace: 'Clé API intégrée (Workspace)',
+    aiConfigCustom: 'Clé API perso (localStorage)',
+    aiConfigNone: 'Sans clé API (Simulation Locale)',
+    aiConfigPlaceholder: 'Collez votre clé API Gemini...',
+    aiConfigSave: 'Sauvegarder la clé',
+    aiConfigSaved: 'Clé enregistrée !',
+    aiConfigActive: 'Modèles IA Connectés',
+    aiConfigSimulated: 'IA Simulée (Sans clé)',
+    aiConfigHelp: 'Saisissez votre clé API personnelle si l\'application n\'a pas de clé par défaut ou si vous voulez utiliser vos propres quotas de requêtes.'
   },
   en: {
     appTitle: 'Video Studio',
@@ -121,6 +133,7 @@ export const translations = {
     start: 'Start (s)',
     duration: 'Duration (s)',
     opacity: 'Opacity',
+    clipVolume: 'Clip Volume (Gain)',
     deleteClip: 'Delete Clip',
     transitionIn: 'Entrance Transition',
     transitionDuration: 'Transition Duration (s)',
@@ -200,6 +213,17 @@ export const translations = {
     applyEffect: 'Apply Effect',
     clipLabel: 'Clip:',
     noClipsAvailable: 'No clips available on the timeline.',
-    effectsTabTitle: 'Filters & Effects'
+    effectsTabTitle: 'Filters & Effects',
+    aiConfigTitle: 'AI Model Settings',
+    aiConfigMode: 'Import Option',
+    aiConfigWorkspace: 'Built-in API Key (Workspace)',
+    aiConfigCustom: 'Custom API Key (localStorage)',
+    aiConfigNone: 'No API Key (Local Simulation)',
+    aiConfigPlaceholder: 'Paste your Gemini API key here...',
+    aiConfigSave: 'Save API Key',
+    aiConfigSaved: 'Key saved successfully!',
+    aiConfigActive: 'AI Models Connected',
+    aiConfigSimulated: 'Simulated AI (Keyless)',
+    aiConfigHelp: 'Provide your personal API key if the default host key is missing or if you prefer to use your own limits/quotas.'
   }
 };

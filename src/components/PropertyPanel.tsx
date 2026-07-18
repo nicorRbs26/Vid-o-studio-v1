@@ -256,6 +256,27 @@ export default function PropertyPanel({ selectedClip, onUpdateClip, onDeleteClip
                   </div>
                 </div>
 
+                {(selectedClip.type === 'audio' || selectedClip.type === 'video') && (
+                  <div className="pt-2">
+                    <div className="flex justify-between text-[9px] text-zinc-500 font-bold uppercase tracking-tighter mb-1">
+                      <span>{t.clipVolume}</span>
+                      <span className="text-cyan-400">{Math.round((selectedClip.volume !== undefined ? selectedClip.volume : 1) * 100)}%</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Volume2 className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                      <input 
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={selectedClip.volume !== undefined ? selectedClip.volume : 1}
+                        onChange={(e) => onUpdateClip({ ...selectedClip, volume: parseFloat(e.target.value) })}
+                        className="w-full h-1 bg-zinc-850 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="pt-4 grid grid-cols-2 gap-2">
                    <button 
                      onClick={() => onSplitClip(selectedClip.id)}

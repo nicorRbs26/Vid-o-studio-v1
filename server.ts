@@ -27,22 +27,19 @@ app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 // Initialize Google Gen AI client lazy-style to prevent immediate crash if key is missing
 let aiClient: GoogleGenAI | null = null;
 
-function getAiClient(): GoogleGenAI {
-  if (!aiClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY_MISSING");
-    }
-    aiClient = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    });
+function getAiClient(customApiKey?: string): GoogleGenAI {
+  const apiKey = customApiKey || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY_MISSING");
   }
-  return aiClient;
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
 }
 
 // Simple pcm to wav converter for gemini-3.1-flash-tts-preview
@@ -96,12 +93,29 @@ app.get('/api/health', (req, res) => {
 // 2. Text Script / Subtitle generator (e.g. gemini-3.5-flash)
 app.post('/api/gemini/generate-script', async (req, res) => {
   try {
-    const { prompt, model = 'gemini-3.5-flash' } = req.body;
+    const { prompt, model = 'gemini-3.5-flash', apiKey, apiKeyMode } = req.body;
     if (!prompt) {
       return res.status(400).json({ error: 'Un prompt est requis.' });
     }
 
-    const ai = getAiClient();
+    if (apiKeyMode === 'none') {
+      const scriptSimulated = `[SCÉNARIO SIMULÉ - MODE SANS CLÉ API]
+      
+SCÈNE 1 - INTRODUCTION (0s - 4s)
+[Plan : Prise de vue stable, tons chauds]
+NARRATEUR : Bienvenue dans cette vidéo dédiée à : "${prompt.substring(0, 70)}".
+
+SCÈNE 2 - ANALYSE (4s - 12s)
+[Plan : Zoom lent progressif et inserts graphiques]
+NARRATEUR : Pour réussir ce projet, nous mettons l'accent sur la structure, l'esthétique sonore et le rythme visuel de chaque calque.
+
+SCÈNE 3 - CONCLUSION (12s - 15s)
+[Plan : Fondu au noir, logo central et texte]
+NARRATEUR : Suivez ces étapes simples pour donner vie à vos idées !`;
+      return res.json({ text: scriptSimulated });
+    }
+
+    const ai = getAiClient(apiKey);
     const systemInstruction = "Tu es un assistant scénariste professionnel. Rédige un script court ou des sous-titres adaptés à un montage vidéo, sans fioritures techniques inutiles. Format de retour clair et concis.";
 
     const response = await ai.models.generateContent({
@@ -118,7 +132,7 @@ app.post('/api/gemini/generate-script', async (req, res) => {
   } catch (err: any) {
     console.error('Error generating script:', err);
     if (err.message === 'GEMINI_API_KEY_MISSING') {
-      res.status(401).json({ error: 'La clé API Gemini (GEMINI_API_KEY) n\'est pas configurée dans les paramètres de l\'application.' });
+      res.status(401).json({ error: 'La clé API Gemini (GEMINI_API_KEY) n\'est pas configurée. Veuillez fournir votre clé perso ou utiliser le mode sans clé.' });
     } else {
       res.status(500).json({ error: err.message || 'Une erreur inconnue est survenue.' });
     }
@@ -128,12 +142,33 @@ app.post('/api/gemini/generate-script', async (req, res) => {
 // 3. Ultra-realistic Text-To-Speech (gemini-3.1-flash-tts-preview)
 app.post('/api/gemini/generate-tts', async (req, res) => {
   try {
-    const { text, voice = 'Zephyr' } = req.body;
+    const { text, voice = 'Zephyr', apiKey, apiKeyMode } = req.body;
     if (!text) {
       return res.status(400).json({ error: 'Le texte est requis.' });
     }
 
-    const ai = getAiClient();
+    if (apiKeyMode === 'none') {
+      const sampleRate = 24000;
+      const durationSec = 3.0;
+      const numSamples = sampleRate * durationSec;
+      const pcmBuffer = Buffer.alloc(numSamples * 2);
+      for (let i = 0; i < numSamples; i++) {
+        const t = i / sampleRate;
+        const freq = 349.23 * (1 + Math.floor(t * 3) * 0.25); // F major chord progression steps
+        const value = Math.sin(2 * Math.PI * freq * t) * Math.exp(-2.5 * t) * 0.5;
+        const pcmValue = Math.floor(value * 32767);
+        pcmBuffer.writeInt16LE(pcmValue, i * 2);
+      }
+      const wavBuffer = pcmToWav(pcmBuffer, sampleRate);
+      const playableBase64 = wavBuffer.toString('base64');
+      return res.json({
+        audioUrl: `data:audio/wav;base64,${playableBase64}`,
+        voiceUsed: `${voice} (Simulé)`,
+        durationEstimation: Math.ceil(pcmBuffer.length / (24000 * 2))
+      });
+    }
+
+    const ai = getAiClient(apiKey);
     const allowedVoices = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'];
     const selectedVoice = allowedVoices.includes(voice) ? voice : 'Zephyr';
 
@@ -169,7 +204,7 @@ app.post('/api/gemini/generate-tts', async (req, res) => {
   } catch (err: any) {
     console.error('Error generating TTS:', err);
     if (err.message === 'GEMINI_API_KEY_MISSING') {
-      res.status(401).json({ error: 'La clé API Gemini (GEMINI_API_KEY) n\'est pas configurée dans les paramètres de l\'application.' });
+      res.status(401).json({ error: 'La clé API Gemini (GEMINI_API_KEY) n\'est pas configurée. Veuillez fournir votre clé perso ou utiliser le mode sans clé.' });
     } else {
       res.status(500).json({ error: err.message || 'Une erreur inconnue est survenue.' });
     }
@@ -179,16 +214,40 @@ app.post('/api/gemini/generate-tts', async (req, res) => {
 // 4. AI Image generator (gemini-3.1-flash-lite-image or gemini-3.1-flash-image)
 app.post('/api/gemini/generate-image', async (req, res) => {
   try {
-    const { prompt, model = 'gemini-3.1-flash-lite-image', aspectRatio = '16:9' } = req.body;
+    const { prompt, model = 'gemini-3.1-flash-lite-image', aspectRatio = '16:9', apiKey, apiKeyMode } = req.body;
     if (!prompt) {
       return res.status(400).json({ error: 'Un prompt descriptif est requis.' });
     }
 
-    const ai = getAiClient();
-
-    // Mapping allowed aspect ratios for image configuration
     const allowedRatios = ['1:1', '3:4', '4:3', '9:16', '16:9'];
     const selectedRatio = allowedRatios.includes(aspectRatio) ? aspectRatio : '16:9';
+
+    if (apiKeyMode === 'none') {
+      const colors = ['#0f172a', '#1e1b4b', '#311042', '#022c22', '#1c1917', '#172554'];
+      const randomColor1 = colors[Math.floor(Math.random() * colors.length)];
+      const randomColor2 = colors[(Math.floor(Math.random() * colors.length) + 1) % colors.length];
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+        <defs>
+          <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:${randomColor1};stop-opacity:1" />
+            <stop offset="100%" style="stop-color:${randomColor2};stop-opacity:1" />
+          </linearGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grad)" />
+        <circle cx="640" cy="360" r="220" fill="#22d3ee" opacity="0.12" filter="blur(60px)" />
+        <rect x="240" y="160" width="800" height="400" rx="20" fill="#000000" opacity="0.3" stroke="#ffffff" stroke-opacity="0.05" />
+        <text x="50%" y="45%" text-anchor="middle" fill="#ffffff" font-family="'Space Grotesk', sans-serif" font-size="36" font-weight="bold" opacity="0.95">${prompt.substring(0, 45)}</text>
+        <text x="50%" y="54%" text-anchor="middle" fill="#22d3ee" font-family="'JetBrains Mono', monospace" font-size="14" font-weight="bold" letter-spacing="2" opacity="0.8">IMAGE SIMULÉE SANS CLÉ API</text>
+      </svg>`;
+      const base64Image = Buffer.from(svg).toString('base64');
+      return res.json({
+        imageUrl: `data:image/svg+xml;base64,${base64Image}`,
+        aspectRatio: selectedRatio,
+        modelUsed: `${model} (Simulé)`
+      });
+    }
+
+    const ai = getAiClient(apiKey);
 
     const response = await ai.models.generateContent({
       model: model,
@@ -226,7 +285,7 @@ app.post('/api/gemini/generate-image', async (req, res) => {
   } catch (err: any) {
     console.error('Error generating image:', err);
     if (err.message === 'GEMINI_API_KEY_MISSING') {
-      res.status(401).json({ error: 'La clé API Gemini (GEMINI_API_KEY) n\'est pas configurée dans les paramètres de l\'application.' });
+      res.status(401).json({ error: 'La clé API Gemini (GEMINI_API_KEY) n\'est pas configurée. Veuillez fournir votre clé perso ou utiliser le mode sans clé.' });
     } else {
       res.status(500).json({ error: err.message || 'Une erreur inconnue est survenue.' });
     }
@@ -236,12 +295,36 @@ app.post('/api/gemini/generate-image', async (req, res) => {
 // 5. AI Music generator (lyria-3-clip-preview or lyria-3-pro-preview)
 app.post('/api/gemini/generate-music', async (req, res) => {
   try {
-    const { prompt, model = 'lyria-3-clip-preview' } = req.body;
+    const { prompt, model = 'lyria-3-clip-preview', apiKey, apiKeyMode } = req.body;
     if (!prompt) {
       return res.status(400).json({ error: 'Le prompt musical est requis.' });
     }
 
-    const ai = getAiClient();
+    if (apiKeyMode === 'none') {
+      const sampleRate = 16000;
+      const durationSec = 8.0;
+      const numSamples = sampleRate * durationSec;
+      const pcmBuffer = Buffer.alloc(numSamples * 2);
+      for (let i = 0; i < numSamples; i++) {
+        const t = i / sampleRate;
+        const lfo = 1 + 0.04 * Math.sin(2 * Math.PI * 0.15 * t);
+        const f1 = 261.63 * lfo; // middle C detuned
+        const f2 = 329.63 * lfo; // E
+        const f3 = 392.00 * lfo; // G
+        const wave = Math.sin(2 * Math.PI * f1 * t) + Math.sin(2 * Math.PI * f2 * t) + Math.sin(2 * Math.PI * f3 * t);
+        const value = wave * 0.25 * Math.sin(Math.PI * (t / durationSec)); // Envelope fade in/out
+        const pcmValue = Math.floor(value * 32767);
+        pcmBuffer.writeInt16LE(pcmValue, i * 2);
+      }
+      const wavBuffer = pcmToWav(pcmBuffer, sampleRate);
+      const playableBase64 = wavBuffer.toString('base64');
+      return res.json({
+        audioUrl: `data:audio/wav;base64,${playableBase64}`,
+        modelUsed: `${model} (Simulé)`
+      });
+    }
+
+    const ai = getAiClient(apiKey);
 
     const responseStream = await ai.models.generateContentStream({
       model: model,
@@ -278,7 +361,7 @@ app.post('/api/gemini/generate-music', async (req, res) => {
   } catch (err: any) {
     console.error('Error generating music:', err);
     if (err.message === 'GEMINI_API_KEY_MISSING') {
-      res.status(401).json({ error: 'La clé API Gemini (GEMINI_API_KEY) n\'est pas configurée dans les paramètres de l\'application.' });
+      res.status(401).json({ error: 'La clé API Gemini (GEMINI_API_KEY) n\'est pas configurée. Veuillez fournir votre clé perso ou utiliser le mode sans clé.' });
     } else {
       res.status(500).json({ error: err.message || 'Une erreur inconnue est survenue.' });
     }

@@ -22,6 +22,10 @@ interface SidebarProps {
   onSelectClip?: (id: string | null) => void;
   onUpdateClip?: (clip: TimelineClip) => void;
   onToast?: (toast: { message: string; type: 'success' | 'error' | 'info' }) => void;
+  apiKeyMode?: 'workspace' | 'custom' | 'none';
+  setApiKeyMode?: (mode: 'workspace' | 'custom' | 'none') => void;
+  customApiKey?: string;
+  setCustomApiKey?: (key: string) => void;
 }
 
 const VIDEO_TEMPLATES = [
@@ -481,10 +485,27 @@ function playSynthPreview(preset: string) {
   }
 }
 
-export default function Sidebar({ assets, onAddAsset, onDeleteAsset, onAddToTimeline, onAddCustomTextClip, t, clips, selectedClipId, onSelectClip, onUpdateClip, onToast }: SidebarProps) {
+export default function Sidebar({ 
+  assets, 
+  onAddAsset, 
+  onDeleteAsset, 
+  onAddToTimeline, 
+  onAddCustomTextClip, 
+  t, 
+  clips, 
+  selectedClipId, 
+  onSelectClip, 
+  onUpdateClip, 
+  onToast,
+  apiKeyMode = 'workspace',
+  setApiKeyMode,
+  customApiKey = '',
+  setCustomApiKey
+}: SidebarProps) {
   const [activeTab, setActiveTab] = React.useState<'uploads' | 'video' | 'audio' | 'text' | 'image' | 'effects'>('uploads');
   const [isProcessing, setIsProcessing] = React.useState(false);
   const [uploadingFiles, setUploadingFiles] = React.useState<{ name: string; progress: string }[]>([]);
+  const [aiSettingsExpanded, setAiSettingsExpanded] = React.useState(false);
 
   // AI Music Generator State
   const [aiMusicPrompt, setAiMusicPrompt] = React.useState('');
@@ -537,7 +558,12 @@ export default function Sidebar({ assets, onAddAsset, onDeleteAsset, onAddToTime
       const response = await fetch('/api/gemini/generate-music', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: aiMusicPrompt, model: aiMusicModel })
+        body: JSON.stringify({ 
+          prompt: aiMusicPrompt, 
+          model: aiMusicModel,
+          apiKey: customApiKey,
+          apiKeyMode: apiKeyMode
+        })
       });
 
       if (!response.ok) {
@@ -582,7 +608,13 @@ export default function Sidebar({ assets, onAddAsset, onDeleteAsset, onAddToTime
       const response = await fetch('/api/gemini/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: aiImagePrompt, model: aiImageModel, aspectRatio: aiImageRatio })
+        body: JSON.stringify({ 
+          prompt: aiImagePrompt, 
+          model: aiImageModel, 
+          aspectRatio: aiImageRatio,
+          apiKey: customApiKey,
+          apiKeyMode: apiKeyMode
+        })
       });
 
       if (!response.ok) {
@@ -613,7 +645,12 @@ export default function Sidebar({ assets, onAddAsset, onDeleteAsset, onAddToTime
       const response = await fetch('/api/gemini/generate-script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: aiTextPrompt, model: aiTextModel })
+        body: JSON.stringify({ 
+          prompt: aiTextPrompt, 
+          model: aiTextModel,
+          apiKey: customApiKey,
+          apiKeyMode: apiKeyMode
+        })
       });
 
       if (!response.ok) {
@@ -848,6 +885,107 @@ export default function Sidebar({ assets, onAddAsset, onDeleteAsset, onAddToTime
 
       {/* Sidebar Panel Content */}
       <div className="flex-1 sm:w-64 sm:flex-initial border-r border-zinc-800 bg-app-bg flex flex-col h-full overflow-hidden">
+        
+        {/* Global AI Config header at the top of the panel */}
+        <div className="border-b border-zinc-800 bg-zinc-900/30">
+          <button
+            id="btn-ai-config-toggle"
+            onClick={() => setAiSettingsExpanded(!aiSettingsExpanded)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-left text-xs text-zinc-400 hover:text-cyan-400 hover:bg-zinc-800/40 transition-all"
+          >
+            <div className="flex items-center gap-2 font-medium">
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+              <span>{t.aiConfiguration || "Configuration Modèles IA"}</span>
+              <span className={cn(
+                "px-1.5 py-0.5 rounded-[4px] text-[8px] font-bold uppercase",
+                apiKeyMode === 'workspace' && "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20",
+                apiKeyMode === 'custom' && "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
+                apiKeyMode === 'none' && "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+              )}>
+                {apiKeyMode === 'workspace' && (t.modeWorkspace || "Workspace")}
+                {apiKeyMode === 'custom' && (t.modeCustom || "Clé Perso")}
+                {apiKeyMode === 'none' && (t.modeSimulation || "Sans Clé (Simulé)")}
+              </span>
+            </div>
+            <span className="text-[10px] text-zinc-500">{aiSettingsExpanded ? "▲" : "▼"}</span>
+          </button>
+          
+          {aiSettingsExpanded && (
+            <div className="p-3 bg-zinc-950/80 border-t border-zinc-800 flex flex-col gap-2 text-xs">
+              <div className="text-[10px] text-zinc-500">
+                {t.aiConfigDescription || "Configurez l'accès aux modèles d'IA générative (Script, Voix, Image, Musique)."}
+              </div>
+              <div className="grid grid-cols-3 gap-1 mt-1">
+                <button
+                  id="btn-ai-mode-workspace"
+                  onClick={() => setApiKeyMode?.('workspace')}
+                  className={cn(
+                    "py-1.5 px-1 rounded-lg border text-[9px] font-medium text-center transition-all",
+                    apiKeyMode === 'workspace' 
+                      ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-400" 
+                      : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800"
+                  )}
+                >
+                  {t.modeWorkspace || "Workspace"}
+                </button>
+                <button
+                  id="btn-ai-mode-custom"
+                  onClick={() => setApiKeyMode?.('custom')}
+                  className={cn(
+                    "py-1.5 px-1 rounded-lg border text-[9px] font-medium text-center transition-all",
+                    apiKeyMode === 'custom' 
+                      ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400" 
+                      : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800"
+                  )}
+                >
+                  {t.modeCustom || "Clé Perso"}
+                </button>
+                <button
+                  id="btn-ai-mode-none"
+                  onClick={() => setApiKeyMode?.('none')}
+                  className={cn(
+                    "py-1.5 px-1 rounded-lg border text-[9px] font-medium text-center transition-all",
+                    apiKeyMode === 'none' 
+                      ? "bg-amber-500/10 border-amber-500/40 text-amber-400" 
+                      : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800"
+                  )}
+                >
+                  {t.modeSimulation || "Simulé"}
+                </button>
+              </div>
+
+              {apiKeyMode === 'custom' && (
+                <div className="flex flex-col gap-1 mt-1.5">
+                  <label className="text-[10px] text-zinc-400 font-medium">Clé API Gemini (Custom) :</label>
+                  <div className="relative">
+                    <input
+                      id="input-custom-api-key"
+                      type="password"
+                      value={customApiKey}
+                      onChange={(e) => setCustomApiKey?.(e.target.value)}
+                      placeholder="AIzaSy..."
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-cyan-500/50 transition-all font-mono"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {apiKeyMode === 'workspace' && (
+                <div className="text-[9px] text-cyan-400/80 bg-cyan-950/20 border border-cyan-950/40 rounded-lg p-2 mt-1 flex items-start gap-1">
+                  <span>ℹ️</span>
+                  <span>Utilise la clé API sécurisée du serveur de l\'application (configurée dans les secrets par l\'administrateur).</span>
+                </div>
+              )}
+
+              {apiKeyMode === 'none' && (
+                <div className="text-[9px] text-amber-400/80 bg-amber-950/20 border border-amber-950/40 rounded-lg p-2 mt-1 flex items-start gap-1">
+                  <span>⚠️</span>
+                  <span>Mode sans clé API activé. Les générations de scripts, voix off, images et musiques seront simulées localement en offline de façon fluide.</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         
         {/* Tab 1: Uploads */}
         {activeTab === 'uploads' && (

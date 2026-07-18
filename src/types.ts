@@ -26,6 +26,7 @@ export interface TimelineClip {
   layer: number;       // Z-index/track
   text?: string;       // For text/subtitle clips
   filter?: string;     // Canvas filter string
+  volume?: number;     // Volume of audio/video clips, from 0 to 1
   transitionIn?: TransitionType;
   transitionDuration?: number;
   style?: {
