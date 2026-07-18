@@ -164,52 +164,111 @@ export default function App() {
     setSelectedClipId(newClip.id);
   };
 
-  const handleTTS = (text: string, options?: { voiceURI?: string; rate?: number; pitch?: number }) => {
+  const handleTTS = async (text: string, options?: { engine?: 'local' | 'gemini'; voiceURI?: string; geminiVoice?: string; rate?: number; pitch?: number }) => {
     if (!text) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang === 'fr' ? 'fr-FR' : 'en-US';
-    
-    let speedFactor = 1;
-    if (options) {
-      if (options.rate !== undefined) {
-        utterance.rate = options.rate;
-        speedFactor = options.rate;
+
+    if (options?.engine === 'gemini') {
+      try {
+        setToast({ message: "Génération de la voix off haute-fidélité par Gemini...", type: 'info' });
+        
+        const response = await fetch('/api/gemini/generate-tts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            text,
+            voice: options.geminiVoice || 'Zephyr'
+          })
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || "Erreur lors de la génération de la voix par l'IA Gemini.");
+        }
+
+        const data = await response.json();
+        const assetId = `tts-gemini-${Date.now()}`;
+        const duration = data.durationEstimation || Math.max(1, text.length * 0.08);
+
+        // Add the generated high-fidelity WAV audio to our media assets list
+        setAssets(prev => [...prev, {
+          id: assetId,
+          name: `Voix Off (Gemini: ${options.geminiVoice || 'Zephyr'})`,
+          type: 'audio',
+          url: data.audioUrl,
+          duration: duration
+        }]);
+
+        // Place on the timeline immediately
+        const newClip: TimelineClip = {
+          id: Math.random().toString(36).substr(2, 9),
+          assetId,
+          type: 'audio',
+          startOffset: currentTime,
+          startTime: 0,
+          duration: duration,
+          layer: 0
+        };
+        setClips(prev => [...prev, newClip]);
+        setSelectedClipId(newClip.id);
+        
+        setToast({ message: "La voix off Gemini a été générée et ajoutée à votre timeline !", type: 'success' });
+        
+        // Autoplay voice
+        const previewAudio = new Audio(data.audioUrl);
+        previewAudio.play().catch(e => console.log("Autoplay blocked:", e));
+
+      } catch (err: any) {
+        console.error("Gemini TTS Fail:", err);
+        setToast({ message: err.message || "Une erreur est survenue lors de la synthèse vocale Gemini.", type: 'error' });
       }
-      if (options.pitch !== undefined) utterance.pitch = options.pitch;
-      if (options.voiceURI) {
-        const voices = window.speechSynthesis.getVoices();
-        const selectedVoice = voices.find(v => v.voiceURI === options.voiceURI);
-        if (selectedVoice) {
-          utterance.voice = selectedVoice;
-          utterance.lang = selectedVoice.lang;
+    } else {
+      // Offline local browser speech synthesis
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang === 'fr' ? 'fr-FR' : 'en-US';
+      
+      let speedFactor = 1;
+      if (options) {
+        if (options.rate !== undefined) {
+          utterance.rate = options.rate;
+          speedFactor = options.rate;
+        }
+        if (options.pitch !== undefined) utterance.pitch = options.pitch;
+        if (options.voiceURI) {
+          const voices = window.speechSynthesis.getVoices();
+          const selectedVoice = voices.find(v => v.voiceURI === options.voiceURI);
+          if (selectedVoice) {
+            utterance.voice = selectedVoice;
+            utterance.lang = selectedVoice.lang;
+          }
         }
       }
-    }
-    
-    // Simuler un asset audio
-    const assetId = `tts-${Date.now()}`;
-    const calculatedDuration = Math.max(1, (text.length * 0.08) / speedFactor); // Approximation
-    setAssets(prev => [...prev, {
-      id: assetId,
-      name: t.voiceOver,
-      type: 'audio',
-      url: '', // Web Speech doesn't give a URL easily, but we play it live
-      duration: calculatedDuration
-    }]);
+      
+      const assetId = `tts-${Date.now()}`;
+      const calculatedDuration = Math.max(1, (text.length * 0.08) / speedFactor); // Approximation
+      setAssets(prev => [...prev, {
+        id: assetId,
+        name: t.voiceOver,
+        type: 'audio',
+        url: '', // Web Speech doesn't give a URL easily, but we play it live
+        duration: calculatedDuration
+      }]);
 
-    const newClip: TimelineClip = {
-      id: Math.random().toString(36).substr(2, 9),
-      assetId,
-      type: 'audio',
-      startOffset: currentTime,
-      startTime: 0,
-      duration: calculatedDuration,
-      layer: 0
-    };
-    setClips(prev => [...prev, newClip]);
-    
-    // Jouer le texte
-    window.speechSynthesis.speak(utterance);
+      const newClip: TimelineClip = {
+        id: Math.random().toString(36).substr(2, 9),
+        assetId,
+        type: 'audio',
+        startOffset: currentTime,
+        startTime: 0,
+        duration: calculatedDuration,
+        layer: 0
+      };
+      setClips(prev => [...prev, newClip]);
+      setSelectedClipId(newClip.id);
+      
+      window.speechSynthesis.speak(utterance);
+    }
   };
 
   const handleSplitClip = (id: string) => {
@@ -322,6 +381,7 @@ export default function App() {
               selectedClipId={selectedClipId}
               onSelectClip={setSelectedClipId}
               onUpdateClip={(updated) => setClips(prev => prev.map(c => c.id === updated.id ? updated : c))}
+              onToast={(toastData) => setToast(toastData)}
             />
             
             <div className="flex-1 flex flex-col relative min-w-0">
@@ -405,6 +465,7 @@ export default function App() {
                       selectedClipId={selectedClipId}
                       onSelectClip={setSelectedClipId}
                       onUpdateClip={(updated) => setClips(prev => prev.map(c => c.id === updated.id ? updated : c))}
+                      onToast={(toastData) => setToast(toastData)}
                     />
                   </motion.div>
                 )}

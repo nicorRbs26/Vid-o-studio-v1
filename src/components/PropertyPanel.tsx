@@ -15,7 +15,7 @@ interface PropertyPanelProps {
   onDeleteClip: (id: string) => void;
   onSplitClip: (id: string) => void;
   onAddText: () => void;
-  onTTS: (text: string, options?: { voiceURI?: string; rate?: number; pitch?: number }) => void;
+  onTTS: (text: string, options?: { engine?: 'local' | 'gemini'; voiceURI?: string; geminiVoice?: string; rate?: number; pitch?: number }) => void;
   isOnline: boolean;
   t: any;
 }
@@ -26,6 +26,10 @@ export default function PropertyPanel({ selectedClip, onUpdateClip, onDeleteClip
   const [selectedVoiceURI, setSelectedVoiceURI] = React.useState<string>('');
   const [rate, setRate] = React.useState<number>(1);
   const [pitch, setPitch] = React.useState<number>(1);
+
+  // New Gemini TTS States
+  const [ttsEngine, setTtsEngine] = React.useState<'local' | 'gemini'>('gemini');
+  const [geminiVoice, setGeminiVoice] = React.useState<string>('Zephyr');
 
   React.useEffect(() => {
     const updateVoices = () => {
@@ -75,77 +79,124 @@ export default function PropertyPanel({ selectedClip, onUpdateClip, onDeleteClip
               <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{t.voiceOver}</h4>
             </div>
             <span className="text-[8px] bg-cyan-950/80 text-cyan-400 px-1.5 py-0.5 rounded border border-cyan-800/50 whitespace-nowrap">
-              {t.ttsOffline}
+              IA Active
             </span>
+          </div>
+
+          {/* Engine Toggle */}
+          <div className="grid grid-cols-2 gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-850">
+            <button
+              type="button"
+              onClick={() => setTtsEngine('gemini')}
+              className={cn(
+                "py-1 rounded text-[9px] font-bold transition-all cursor-pointer",
+                ttsEngine === 'gemini'
+                  ? "bg-cyan-50 text-black shadow"
+                  : "text-zinc-500 hover:text-zinc-300"
+              )}
+            >
+              Gemini HD
+            </button>
+            <button
+              type="button"
+              onClick={() => setTtsEngine('local')}
+              className={cn(
+                "py-1 rounded text-[9px] font-bold transition-all cursor-pointer",
+                ttsEngine === 'local'
+                  ? "bg-cyan-50 text-black shadow"
+                  : "text-zinc-500 hover:text-zinc-300"
+              )}
+            >
+              {t.ttsOffline}
+            </button>
           </div>
 
           <textarea 
             value={ttsText}
             onChange={(e) => setTtsText(e.target.value)}
-            placeholder="..."
+            placeholder="Écrivez le texte de la voix off ici..."
             className="w-full h-16 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-[11px] focus:border-cyan-500 outline-none resize-none text-zinc-300 placeholder:text-zinc-700"
           />
 
-          {/* Voice Select */}
-          {voices.length > 0 && (
+          {ttsEngine === 'gemini' ? (
             <div className="flex flex-col gap-1">
-              <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">{t.voiceSelect}</label>
+              <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">Modèle de Voix Gemini</label>
               <select
-                value={selectedVoiceURI}
-                onChange={(e) => setSelectedVoiceURI(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-1.5 text-[10px] text-zinc-300 focus:border-cyan-500 focus:outline-none"
+                value={geminiVoice}
+                onChange={(e) => setGeminiVoice(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-1.5 text-[10px] text-zinc-300 focus:border-cyan-500 focus:outline-none cursor-pointer"
               >
-                {voices.map((v) => (
-                  <option key={v.voiceURI} value={v.voiceURI}>
-                    {v.name} ({v.lang})
-                  </option>
-                ))}
+                <option value="Zephyr">Zephyr (Chaleureux & Naturel)</option>
+                <option value="Fenrir">Fenrir (Profond & Narrateur)</option>
+                <option value="Kore">Kore (Féminin & Clair)</option>
+                <option value="Charon">Charon (Mature & Posé)</option>
+                <option value="Puck">Puck (Enjoué & Dynamique)</option>
               </select>
             </div>
+          ) : (
+            <>
+              {/* Voice Select */}
+              {voices.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">{t.voiceSelect}</label>
+                  <select
+                    value={selectedVoiceURI}
+                    onChange={(e) => setSelectedVoiceURI(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-1.5 text-[10px] text-zinc-300 focus:border-cyan-500 focus:outline-none cursor-pointer"
+                  >
+                    {voices.map((v) => (
+                      <option key={v.voiceURI} value={v.voiceURI}>
+                        {v.name} ({v.lang})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Pitch Slider */}
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
+                  <span>{t.voicePitch}</span>
+                  <span className="text-cyan-400">{pitch.toFixed(1)}x</span>
+                </div>
+                <input 
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.1"
+                  value={pitch}
+                  onChange={(e) => setPitch(parseFloat(e.target.value))}
+                  className="w-full h-1 bg-zinc-850 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                />
+              </div>
+
+              {/* Rate Selectors (Speed) */}
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider mb-0.5">{t.voiceRate}</span>
+                <div className="grid grid-cols-4 gap-1">
+                  {[0.5, 1.0, 1.5, 2.0].map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setRate(r)}
+                      className={cn(
+                        "py-1 rounded text-[9px] font-bold border transition-all cursor-pointer",
+                        rate === r
+                          ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30"
+                          : "bg-zinc-950 text-zinc-500 border-zinc-800 hover:text-zinc-300"
+                      )}
+                    >
+                      {r === 0.5 ? t.voiceRateSlow : r === 1.0 ? t.voiceRateNormal : r === 1.5 ? '1.5x' : t.voiceRateFast}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
 
-          {/* Pitch Slider */}
-          <div className="flex flex-col gap-1">
-            <div className="flex justify-between text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
-              <span>{t.voicePitch}</span>
-              <span className="text-cyan-400">{pitch.toFixed(1)}x</span>
-            </div>
-            <input 
-              type="range"
-              min="0.5"
-              max="2.0"
-              step="0.1"
-              value={pitch}
-              onChange={(e) => setPitch(parseFloat(e.target.value))}
-              className="w-full h-1 bg-zinc-850 rounded-lg appearance-none cursor-pointer accent-cyan-500"
-            />
-          </div>
-
-          {/* Rate Selectors (Speed) */}
-          <div className="flex flex-col gap-1">
-            <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider mb-0.5">{t.voiceRate}</span>
-            <div className="grid grid-cols-4 gap-1">
-              {[0.5, 1.0, 1.5, 2.0].map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setRate(r)}
-                  className={cn(
-                    "py-1 rounded text-[9px] font-bold border transition-all cursor-pointer",
-                    rate === r
-                      ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30"
-                      : "bg-zinc-950 text-zinc-500 border-zinc-800 hover:text-zinc-300"
-                  )}
-                >
-                  {r === 0.5 ? t.voiceRateSlow : r === 1.0 ? t.voiceRateNormal : r === 1.5 ? '1.5x' : t.voiceRateFast}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <button 
-            onClick={() => onTTS(ttsText, { voiceURI: selectedVoiceURI, rate, pitch })}
-            className="w-full py-1.5 bg-zinc-200 text-black rounded-md text-[10px] font-bold hover:bg-white transition-colors uppercase tracking-wider cursor-pointer"
+            onClick={() => onTTS(ttsText, { engine: ttsEngine, voiceURI: selectedVoiceURI, geminiVoice, rate, pitch })}
+            className="w-full py-1.5 bg-zinc-200 text-black rounded-md text-[10px] font-bold hover:bg-white transition-colors uppercase tracking-wider cursor-pointer flex items-center justify-center gap-1.5"
           >
             {t.generateAudio}
           </button>
