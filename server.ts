@@ -13,9 +13,14 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
-// Define dirname equivalent for ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Define dirname equivalent for ESM / CJS safely
+let resolvedFilename = '';
+if (typeof __filename !== 'undefined') {
+  resolvedFilename = __filename;
+} else if (typeof import.meta !== 'undefined' && import.meta.url) {
+  resolvedFilename = fileURLToPath(import.meta.url);
+}
+const resolvedDirname = resolvedFilename ? path.dirname(resolvedFilename) : '';
 
 const app = express();
 const PORT = 3000;
